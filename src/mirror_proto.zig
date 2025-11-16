@@ -197,16 +197,16 @@ pub fn decodeTransactionRecordResponse(
     const wrapper = try extractResponseMessage(payload, 15);
     const record_bytes = try extractResponseMessage(wrapper, 3);
 
-    var duplicate_values = std.ArrayList([]const u8).init(allocator);
-    defer duplicate_values.deinit();
-    var child_values = std.ArrayList([]const u8).init(allocator);
-    defer child_values.deinit();
+    var duplicate_values: std.ArrayList([]const u8) = .{};
+    defer duplicate_values.deinit(allocator);
+    var child_values: std.ArrayList([]const u8) = .{};
+    defer child_values.deinit(allocator);
 
     var resp_reader = ProtoReader{ .data = wrapper, .index = 0 };
     while (try resp_reader.next()) |field| {
         switch (field.number) {
-            4 => try duplicate_values.append(field.value),
-            5 => try child_values.append(field.value),
+            4 => try duplicate_values.append(allocator, field.value),
+            5 => try child_values.append(allocator, field.value),
             else => {},
         }
     }
@@ -800,18 +800,18 @@ fn decodeTransactionId(bytes: []const u8) !model.TransactionId {
 }
 
 fn decodeTransferList(allocator: std.mem.Allocator, bytes: []const u8) ![]model.Transfer {
-    var list = std.ArrayList(model.Transfer).init(allocator);
-    errdefer list.deinit();
+    var list: std.ArrayList(model.Transfer) = .{};
+    errdefer list.deinit(allocator);
 
     var reader = ProtoReader{ .data = bytes, .index = 0 };
     while (try reader.next()) |field| {
         if (field.number == 1) {
             const transfer = try decodeAccountAmount(field.value);
-            try list.append(transfer);
+            try list.append(allocator, transfer);
         }
     }
 
-    return try list.toOwnedSlice();
+    return try list.toOwnedSlice(allocator);
 }
 
 fn decodeAccountAmount(bytes: []const u8) !model.Transfer {

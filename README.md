@@ -162,6 +162,103 @@ const response = try transfer.executeAsync(&client);
 const receipt2 = try client.consensus_client.getTransactionReceipt(response.transaction_id.?);
 ```
 
+### Web3 Integration
+
+```zig
+// Connect to Hedera via Web3 JSON-RPC
+var web3 = try zelix.Web3RpcClient.init(allocator, "https://testnet.hashio.io/api", 296);
+defer web3.deinit();
+
+// Standard Web3 methods
+const chain_id = try web3.getChainId(); // "0x128" (296)
+const block_number = try web3.getBlockNumber();
+const balance = try web3.getBalance("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb", "latest");
+
+// MetaMask integration
+var metamask = zelix.MetaMaskProvider.init(allocator, 296);
+defer metamask.deinit();
+
+// Request account access
+const accounts = try metamask.requestAccounts();
+defer allocator.free(accounts);
+
+// Add Hedera network to MetaMask
+try metamask.addChain(zelix.HederaChainParams.testnet);
+
+// Sign EIP-155 transactions
+const eip_tx = zelix.Eip155Transaction{
+    .nonce = 0,
+    .gas_price = 100_000_000_000,
+    .gas_limit = 21000,
+    .to = some_address,
+    .value = 1000000000000000000, // 1 HBAR in wei
+    .data = &[_]u8{},
+    .chain_id = zelix.eip155.ChainId.testnet,
+};
+const signature = try eip_tx.sign(allocator, private_key);
+```
+
+### Contract Verification
+
+```zig
+// Verify a deployed contract
+var verifier = zelix.ContractVerifier.init(allocator, .testnet);
+defer verifier.deinit();
+
+const verification_request = zelix.contract_verification.VerificationRequest{
+    .contract_id = contract_id,
+    .source_code = solidity_source,
+    .compiler_version = "0.8.20",
+    .optimization_enabled = true,
+    .optimization_runs = 200,
+};
+
+const result = try verifier.verify(verification_request);
+defer result.deinit(allocator);
+
+if (result.verified) {
+    std.debug.print("Contract verified! ✅\n", .{});
+}
+
+// Or use Sourcify for decentralized verification
+var sourcify = try zelix.SourcifyVerifier.init(allocator);
+defer sourcify.deinit();
+```
+
+### Async I/O & Performance
+
+```zig
+// Use async tasks for concurrent operations
+var task = zelix.AsyncTask([]u8).init(allocator);
+defer task.deinit();
+
+try task.spawn(someAsyncFunction, .{param1, param2});
+
+// Poll for completion
+while (task.poll() == .pending) {
+    std.time.sleep(std.time.ns_per_ms * 10);
+}
+
+const result = try task.wait();
+
+// Or use an executor with thread pool
+var executor = try zelix.Executor.init(allocator, 4); // 4 worker threads
+defer executor.deinit();
+
+try executor.submit(someWork, .{});
+
+// HTTP connection pooling (automatic when using clients)
+var pool = try zelix.ConnectionPool.init(allocator, 10); // max 10 connections
+defer pool.deinit();
+
+// Streaming gzip decompression for Block Streams
+var decompressor = try zelix.GzipDecompressor.init(allocator);
+defer decompressor.deinit();
+
+const decompressed = try decompressor.decompress(compressed_block_data);
+defer allocator.free(decompressed);
+```
+
 ## Documentation
 
 - **[Overview](docs/OVERVIEW.md)** - API mapping and concepts
@@ -218,6 +315,30 @@ zig run examples/stream_transactions.zig
 - ✅ Topic message subscription (gRPC streaming)
 - ✅ Topic message reading (REST)
 - 🔄 Topic creation/updates
+
+### Smart Contracts (EVM + Native)
+- ✅ EVM (Solidity) contract deployment
+- ✅ EVM contract function calls
+- ✅ Native Hedera contract support (Rust/Go WASM)
+- ✅ Solidity ABI encoding/decoding
+- ✅ Event log parsing
+- ✅ Gas estimation
+- ✅ Contract queries (read-only)
+- ✅ Ethereum address support
+
+### Web3 Compatibility
+- ✅ EIP-155 transaction signing
+- ✅ Web3-style JSON-RPC interface
+- ✅ MetaMask wallet integration support
+- ✅ Contract verification (Sourcify + custom)
+- ✅ Hedera chain parameters for MetaMask
+
+### Performance & Infrastructure
+- ✅ Streaming gzip decompression
+- ✅ HTTP connection pooling
+- ✅ Async I/O with task executor
+- ✅ Multi-threaded task execution
+- ✅ Channel-based async communication
 
 ### Block Streams
 - ✅ Block subscription (`subscribeBlockStream`)
@@ -334,9 +455,10 @@ Transaction streaming performance comparison (10,000 transactions):
 ### In Progress
 - 🔄 Comprehensive test coverage expansion
 
-### Planned
-- 📋 EVM compatibility layer
+### Planned (Future Phases)
 - 📋 Post-quantum crypto integration (via Kriptix)
+- 📋 Web3 JSON-RPC interface
+- 📋 MetaMask wallet integration
 - 📋 WebAssembly builds
 - 📋 C FFI bindings
 

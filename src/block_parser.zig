@@ -19,26 +19,26 @@ pub const ParsedTransaction = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator) ParsedTransaction {
+        _ = allocator;
         return .{
             .transaction_id = .{},
             .consensus_timestamp = .{},
-            .transfers = std.ArrayList(Transfer).init(allocator),
+            .transfers = .{},
         };
     }
 
-    pub fn deinit(self: *ParsedTransaction) void {
-        self.transfers.deinit();
+    pub fn deinit(self: *ParsedTransaction, allocator: std.mem.Allocator) void {
+        self.transfers.deinit(allocator);
     }
 
     /// Convert to TransactionRecord for compatibility with existing APIs
     pub fn toTransactionRecord(self: *const ParsedTransaction, allocator: std.mem.Allocator) !model.TransactionRecord {
-        _ = allocator;
         return model.TransactionRecord{
             .transaction_id = self.transaction_id,
             .consensus_timestamp = self.consensus_timestamp,
             .memo = self.memo,
             .transaction_fee = self.transaction_fee,
-            .transfers = try self.transfers.clone(),
+            .transfers = try self.transfers.clone(allocator),
             .status = .success,
             .is_duplicate = false,
             .is_child = false,
@@ -102,7 +102,7 @@ pub const StateChange = struct {
 /// Parse event_transaction BlockItem into ParsedTransaction
 pub fn parseEventTransaction(allocator: std.mem.Allocator, data: []const u8) !ParsedTransaction {
     var tx = ParsedTransaction.init(allocator);
-    errdefer tx.deinit();
+    errdefer tx.deinit(allocator);
 
     var reader = proto.Reader.init(data);
 
@@ -130,7 +130,7 @@ pub fn parseEventTransaction(allocator: std.mem.Allocator, data: []const u8) !Pa
             },
             5 => { // transfer_list
                 if (field.data == .bytes) {
-                    try parseTransferList(&tx.transfers, field.data.bytes);
+                    try parseTransferList(allocator, &tx.transfers, field.data.bytes);
                 }
             },
             else => {
@@ -204,8 +204,8 @@ pub fn parseTransactionOutput(data: []const u8) !ParsedTransactionOutput {
 
 /// Parse state_changes BlockItem into list of StateChange entries
 pub fn parseStateChanges(allocator: std.mem.Allocator, data: []const u8) !std.ArrayList(StateChange) {
-    var changes = std.ArrayList(StateChange).init(allocator);
-    errdefer changes.deinit();
+    var changes: std.ArrayList(StateChange) = .{};
+    errdefer changes.deinit(allocator);
 
     var reader = proto.Reader.init(data);
 
@@ -213,7 +213,7 @@ pub fn parseStateChanges(allocator: std.mem.Allocator, data: []const u8) !std.Ar
         if (field.field_number == 1 and field.data == .bytes) {
             // Parse individual state change
             const change = try parseStateChange(field.data.bytes);
-            try changes.append(change);
+            try changes.append(allocator, change);
         } else {
             try reader.skip(field.wire_type);
         }
@@ -298,14 +298,14 @@ fn parseAccountId(data: []const u8) !model.AccountId {
     return account_id;
 }
 
-fn parseTransferList(transfers: *std.ArrayList(ParsedTransaction.Transfer), data: []const u8) !void {
+fn parseTransferList(allocator: std.mem.Allocator, transfers: *std.ArrayList(ParsedTransaction.Transfer), data: []const u8) !void {
     var reader = proto.Reader.init(data);
 
     while (try reader.readField()) |field| {
         if (field.field_number == 1 and field.data == .bytes) {
             // Parse individual transfer
             const transfer = try parseTransfer(field.data.bytes);
-            try transfers.append(transfer);
+            try transfers.append(allocator, transfer);
         } else {
             try reader.skip(field.wire_type);
         }

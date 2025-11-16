@@ -59,3 +59,36 @@ pub const ConsensusClient = @import("consensus.zig").ConsensusClient;
 // Block Streams
 pub const BlockStreamClient = @import("block_stream.zig").BlockStreamClient;
 pub const block_parser = @import("block_parser.zig");
+
+// Smart Contracts (EVM + Native)
+pub const abi = @import("abi.zig");
+pub const contract = @import("contract.zig");
+pub const Contract = contract.Contract;
+pub const ContractDeployer = contract.ContractDeployer;
+pub const EventLog = contract.EventLog;
+pub const GasEstimator = contract.GasEstimator;
+
+// Performance & Infrastructure
+pub const compression = @import("compression.zig");
+pub const GzipDecompressor = compression.GzipDecompressor;
+pub const connection_pool = @import("connection_pool.zig");
+pub const ConnectionPool = connection_pool.ConnectionPool;
+pub const async_io = @import("async_io.zig");
+pub const AsyncTask = async_io.AsyncTask;
+pub const Executor = async_io.Executor;
+pub const Channel = async_io.Channel;
+
+// Web3 Compatibility
+pub const eip155 = @import("eip155.zig");
+pub const Eip155Transaction = eip155.Eip155Transaction;
+pub const Eip155Signature = eip155.Eip155Signature;
+pub const web3_rpc = @import("web3_rpc.zig");
+pub const Web3RpcClient = web3_rpc.Web3RpcClient;
+pub const metamask = @import("metamask.zig");
+pub const MetaMaskProvider = metamask.MetaMaskProvider;
+pub const HederaChainParams = metamask.HederaChainParams;
+
+// Contract Verification
+pub const contract_verification = @import("contract_verification.zig");
+pub const ContractVerifier = contract_verification.ContractVerifier;
+pub const SourcifyVerifier = contract_verification.SourcifyVerifier;

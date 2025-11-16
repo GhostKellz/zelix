@@ -33,7 +33,7 @@ pub fn main() !void {
             .event_transaction => {
                 std.debug.print("  Found transaction event\n", .{});
                 var tx = try item.parseEventTransaction(allocator);
-                defer tx.deinit();
+                defer tx.deinit(allocator);
 
                 std.debug.print("    Transaction ID: 0.0.{d}@{d}.{d}\n", .{
                     tx.transaction_id.account_id.num,
@@ -81,7 +81,7 @@ pub fn main() !void {
             .state_changes => {
                 std.debug.print("  Found state changes\n", .{});
                 var changes = try item.parseStateChanges(allocator);
-                defer changes.deinit();
+                defer changes.deinit(allocator);
 
                 std.debug.print("    Total changes: {d}\n", .{changes.items.len});
                 for (changes.items) |change| {

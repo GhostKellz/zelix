@@ -235,11 +235,11 @@ fn decodePemBlock(allocator: std.mem.Allocator, pem: []const u8, begin: []const 
     const end_index = mem.indexOf(u8, tail, end) orelse return error.InvalidPem;
     const raw_body = tail[0..end_index];
 
-    var cleaned = std.ArrayList(u8).init(allocator);
-    defer cleaned.deinit();
+    var cleaned: std.ArrayList(u8) = .{};
+    defer cleaned.deinit(allocator);
     for (raw_body) |c| switch (c) {
         ' ', '\n', '\r', '\t' => {},
-        else => try cleaned.append(c),
+        else => try cleaned.append(allocator, c),
     };
 
     return base64.standard.Decoder.decodeAlloc(allocator, cleaned.items) catch error.InvalidPem;
