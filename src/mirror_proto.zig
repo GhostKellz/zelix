@@ -948,7 +948,7 @@ fn decodeKey(bytes: []const u8) !?crypto.PublicKey {
             2 => {
                 if (field.value.len != 32) return DecodeError.UnsupportedKeyType;
                 var raw: [32]u8 = undefined;
-                mem.copy(u8, raw[0..], field.value);
+                @memcpy(raw[0..], field.value);
                 return crypto.PublicKey.fromBytes(raw) catch return DecodeError.UnsupportedKeyType;
             },
             else => {},

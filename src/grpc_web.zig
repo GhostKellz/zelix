@@ -185,15 +185,15 @@ pub const GrpcWebClient = struct {
     }
 
     fn attemptStreaming(self: *GrpcWebClient, full_path: []const u8, request_payload: []const u8, handler: anytype) !AttemptOutcome {
-        var headers = std.http.Headers{ .allocator = self.allocator };
-        defer headers.deinit();
-        try headers.append("content-type", "application/grpc-web+proto");
-        try headers.append("x-grpc-web", "1");
-        try headers.append("x-user-agent", "zelix-grpc-web/0.1");
-        try headers.append("te", "trailers");
-        try headers.append("grpc-accept-encoding", "identity");
-        try headers.append("accept", "application/grpc-web+proto");
-        try headers.append("host", self.authority);
+        const extra_headers = [_]std.http.Header{
+            .{ .name = "content-type", .value = "application/grpc-web+proto" },
+            .{ .name = "x-grpc-web", .value = "1" },
+            .{ .name = "x-user-agent", .value = "zelix-grpc-web/0.1" },
+            .{ .name = "te", .value = "trailers" },
+            .{ .name = "grpc-accept-encoding", .value = "identity" },
+            .{ .name = "accept", .value = "application/grpc-web+proto" },
+            .{ .name = "host", .value = self.authority },
+        };
 
         var uri = self.base_uri;
         uri.path = full_path;
@@ -203,7 +203,7 @@ pub const GrpcWebClient = struct {
         const framed = try frameRequest(self.allocator, request_payload);
         defer self.allocator.free(framed);
 
-        var request = try self.http_client.request(.POST, uri, headers, .{});
+        var request = try self.http_client.request(.POST, uri, .{ .extra_headers = &extra_headers });
         defer request.deinit();
 
         try request.start();
@@ -307,7 +307,7 @@ fn frameRequest(allocator: std.mem.Allocator, payload: []const u8) ![]u8 {
     var framed = try allocator.alloc(u8, total);
     framed[0] = 0;
     std.mem.writeInt(u32, framed[1..5], @intCast(payload.len), .big);
-    std.mem.copy(u8, framed[5..], payload);
+    @memcpy(framed[5..], payload);
     return framed;
 }
 

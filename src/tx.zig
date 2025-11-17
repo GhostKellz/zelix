@@ -1051,7 +1051,7 @@ test "TopicMessageSubmitTransaction produces signature" {
     try std.testing.expectEqual(@as(usize, 64), sig_field.asBytes().len);
 
     var signature: [64]u8 = undefined;
-    std.mem.copy(u8, signature[0..], sig_field.asBytes());
+    @memcpy(signature[0..], sig_field.asBytes());
 
     const public_key = key.publicKey();
     try public_key.verify(body_field.asBytes(), signature);

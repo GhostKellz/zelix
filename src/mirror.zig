@@ -226,6 +226,7 @@ pub const MirrorClient = struct {
                 self.logGrpcFallback("getAccountInfo", err);
                 return try self.getAccountInfoRestDetailed(account_id);
             },
+            .block_stream => return error.NotSupported,
         };
     }
 
@@ -236,6 +237,7 @@ pub const MirrorClient = struct {
                 self.logGrpcFallback("getTokenInfo", err);
                 return try self.getTokenInfoRest(token_id);
             },
+            .block_stream => return error.NotSupported,
         };
     }
 
@@ -1310,11 +1312,13 @@ pub const MirrorClient = struct {
 
     fn fetch(self: *MirrorClient, url: []const u8, accept: ?[]const u8) ![]u8 {
         const uri = try std.Uri.parse(url);
-        var headers = std.http.Headers{ .allocator = self.allocator };
-        defer headers.deinit();
-        if (accept) |value| try headers.append("accept", value);
 
-        var request = try self.http_client.request(.GET, uri, headers, .{});
+        const extra_headers: []const std.http.Header = if (accept) |value|
+            &[_]std.http.Header{.{ .name = "accept", .value = value }}
+        else
+            &[_]std.http.Header{};
+
+        var request = try self.http_client.request(.GET, uri, .{ .extra_headers = extra_headers });
         defer request.deinit();
 
         try request.start();

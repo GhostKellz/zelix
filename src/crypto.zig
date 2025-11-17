@@ -55,8 +55,8 @@ pub const PrivateKey = union(enum) {
         const secret = self.toBytes();
         var buf = try allocator.alloc(u8, ed25519_pkcs8_prefix.len + secret.len);
         errdefer allocator.free(buf);
-        mem.copy(u8, buf[0..ed25519_pkcs8_prefix.len], ed25519_pkcs8_prefix);
-        mem.copy(u8, buf[ed25519_pkcs8_prefix.len..], secret[0..]);
+        @memcpy(buf[0..ed25519_pkcs8_prefix.len], &ed25519_pkcs8_prefix);
+        @memcpy(buf[ed25519_pkcs8_prefix.len..], secret[0..]);
         return buf;
     }
 
@@ -79,9 +79,9 @@ pub const PrivateKey = union(enum) {
 
     pub fn fromDer(bytes: []const u8) !PrivateKey {
         if (bytes.len != ed25519_pkcs8_prefix.len + 32) return error.InvalidDer;
-        if (!mem.startsWith(u8, bytes, ed25519_pkcs8_prefix)) return error.InvalidDer;
+        if (!mem.startsWith(u8, bytes, &ed25519_pkcs8_prefix)) return error.InvalidDer;
         var secret: [32]u8 = undefined;
-        mem.copy(u8, secret[0..], bytes[bytes.len - 32 .. bytes.len]);
+        @memcpy(secret[0..], bytes[bytes.len - 32 .. bytes.len]);
         return fromBytes(secret);
     }
 
@@ -92,8 +92,7 @@ pub const PrivateKey = union(enum) {
     }
 
     pub fn fromBytes(bytes: [32]u8) PrivateKey {
-        const secret_key = Ed25519.SecretKey.fromBytes(bytes);
-        const key_pair = Ed25519.KeyPair.fromSecretKey(secret_key) catch unreachable;
+        const key_pair = Ed25519.KeyPair.generateDeterministic(bytes) catch unreachable;
         return .{ .ed25519 = key_pair };
     }
 };
@@ -134,8 +133,8 @@ pub const PublicKey = union(enum) {
         const raw = self.toBytes();
         var buf = try allocator.alloc(u8, ed25519_spki_prefix.len + raw.len);
         errdefer allocator.free(buf);
-        mem.copy(u8, buf[0..ed25519_spki_prefix.len], ed25519_spki_prefix);
-        mem.copy(u8, buf[ed25519_spki_prefix.len..], raw[0..]);
+        @memcpy(buf[0..ed25519_spki_prefix.len], &ed25519_spki_prefix);
+        @memcpy(buf[ed25519_spki_prefix.len..], raw[0..]);
         return buf;
     }
 
@@ -156,9 +155,9 @@ pub const PublicKey = union(enum) {
 
     pub fn fromDer(bytes: []const u8) !PublicKey {
         if (bytes.len != ed25519_spki_prefix.len + 32) return error.InvalidDer;
-        if (!mem.startsWith(u8, bytes, ed25519_spki_prefix)) return error.InvalidDer;
+        if (!mem.startsWith(u8, bytes, &ed25519_spki_prefix)) return error.InvalidDer;
         var raw: [32]u8 = undefined;
-        mem.copy(u8, raw[0..], bytes[bytes.len - 32 .. bytes.len]);
+        @memcpy(raw[0..], bytes[bytes.len - 32 .. bytes.len]);
         return fromBytes(raw);
     }
 
@@ -242,7 +241,11 @@ fn decodePemBlock(allocator: std.mem.Allocator, pem: []const u8, begin: []const 
         else => try cleaned.append(allocator, c),
     };
 
-    return base64.standard.Decoder.decodeAlloc(allocator, cleaned.items) catch error.InvalidPem;
+    const decoded_size = base64.standard.Decoder.calcSizeForSlice(cleaned.items) catch return error.InvalidPem;
+    const decoded = try allocator.alloc(u8, decoded_size);
+    errdefer allocator.free(decoded);
+    base64.standard.Decoder.decode(decoded, cleaned.items) catch return error.InvalidPem;
+    return decoded;
 }
 
 pub const Error = error{
