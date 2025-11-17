@@ -35,6 +35,7 @@ pub const MirrorClient = struct {
     block_node_endpoint: ?[]u8,
     grpc_fallback_logged: bool,
     http_client: std.http.Client,
+    threaded_io: std.Io.Threaded,
     grpc_client: ?grpc_web.GrpcWebClient,
     block_stream_client: ?block_stream.BlockStreamClient,
     grpc_debug_payloads: bool = false,
@@ -154,18 +155,21 @@ pub const MirrorClient = struct {
             });
         }
 
-        return .{
+        var result = MirrorClient{
             .allocator = options.allocator,
             .transport = options.transport,
             .base_url = base_copy,
             .grpc_endpoint = grpc_copy,
             .block_node_endpoint = block_node_copy,
             .grpc_fallback_logged = false,
-            .http_client = std.http.Client{ .allocator = options.allocator, .io = .{} },
+            .threaded_io = std.Io.Threaded.init(options.allocator),
+            .http_client = undefined, // Will be set below
             .grpc_client = grpc_client,
             .block_stream_client = block_stream_client,
             .grpc_debug_payloads = false,
         };
+        result.http_client = std.http.Client{ .allocator = options.allocator, .io = result.threaded_io.io() };
+        return result;
     }
 
     pub fn deinit(self: *MirrorClient) void {

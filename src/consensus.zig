@@ -235,6 +235,7 @@ pub const ConsensusClient = struct {
     operator: ?config.Operator,
     submit_url: []u8,
     http_client: std.http.Client,
+    threaded_io: std.Io.Threaded,
     receipt_max_wait_ns: u64,
     receipt_poll_interval_ns: u64,
     query_deadline_ns: u64,
@@ -311,14 +312,15 @@ pub const ConsensusClient = struct {
             .deadline_ns = null,
         };
 
-        return .{
+        var result = ConsensusClient{
             .allocator = options.allocator,
             .network = options.network,
             .nodes = nodes,
             .next_index = 0,
             .operator = options.operator,
             .submit_url = submit_url,
-            .http_client = std.http.Client{ .allocator = options.allocator, .io = .{} },
+            .http_client = undefined,
+            .threaded_io = std.Io.Threaded.init(options.allocator),
             .receipt_max_wait_ns = options.receipt_max_wait_ns,
             .receipt_poll_interval_ns = options.receipt_poll_interval_ns,
             .query_deadline_ns = options.query_deadline_ns,
@@ -328,6 +330,8 @@ pub const ConsensusClient = struct {
             .receipt_pending_attempts = 0,
             .grpc_debug_payloads = false,
         };
+        result.http_client = std.http.Client{ .allocator = options.allocator, .io = result.threaded_io.io() };
+        return result;
     }
 
     pub fn deinit(self: *ConsensusClient) void {

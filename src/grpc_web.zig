@@ -47,18 +47,22 @@ pub const GrpcWebClient = struct {
 
     pub fn initWithOptions(allocator: std.mem.Allocator, endpoint: []const u8, options: Options) !GrpcWebClient {
         const parsed = try std.Uri.parse(endpoint);
-        if (parsed.scheme == null) return Error.InvalidEndpoint;
-        if (parsed.host == null) return Error.MissingAuthority;
+        if (parsed.scheme.len == 0) return Error.InvalidEndpoint;
+        const host_component = parsed.host orelse return Error.MissingAuthority;
+        const host_str = host_component.percent_encoded;
 
-        const authority = try buildAuthority(allocator, parsed.host.?, parsed.port);
+        const authority = try buildAuthority(allocator, host_str, parsed.port);
         errdefer allocator.free(authority);
 
-        const prefix = try allocator.dupe(u8, parsed.path);
+        const prefix = try allocator.dupe(u8, parsed.path.percent_encoded);
         errdefer allocator.free(prefix);
+
+        // Initialize threaded IO for HTTP client
+        var threaded_io = std.Io.Threaded.init(allocator);
 
         return .{
             .allocator = allocator,
-            .http_client = std.http.Client{ .allocator = allocator, .io = .{} },
+            .http_client = std.http.Client{ .allocator = allocator, .io = threaded_io.io() },
             .base_uri = parsed,
             .authority = authority,
             .path_prefix = prefix,
