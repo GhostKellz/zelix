@@ -601,12 +601,12 @@ pub const ConsensusClient = struct {
 
         const uri = try std.Uri.parse(self.submit_url);
 
-        var headers = std.http.Headers{ .allocator = self.allocator };
-        defer headers.deinit();
-        try headers.append("content-type", "application/json");
-        try headers.append("accept", "application/json");
+        const headers = [_]std.http.Header{
+            .{ .name = "content-type", .value = "application/json" },
+            .{ .name = "accept", .value = "application/json" },
+        };
 
-        var request = try self.http_client.request(.POST, uri, headers, .{});
+        var request = try self.http_client.request(.POST, uri, .{ .extra_headers = &headers });
         defer request.deinit();
 
         try request.start();
