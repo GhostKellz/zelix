@@ -1321,14 +1321,18 @@ pub const MirrorClient = struct {
         var request = try self.http_client.request(.GET, uri, .{ .extra_headers = extra_headers });
         defer request.deinit();
 
-        try request.start();
-        try request.wait();
+        try request.sendBodiless();
+        var buf: [4096]u8 = undefined;
+        var response = try request.receiveHead(&buf);
 
-        if (request.response.status != .ok) {
+        if (response.head.status != .ok) {
             return error.HttpError;
         }
 
-        return request.reader().readAllAlloc(self.allocator, 4 * 1024 * 1024) catch return error.ReadError;
+        var transfer_buf: [4096]u8 = undefined;
+        var reader = response.reader(&transfer_buf);
+
+        return reader.allocRemaining(self.allocator, std.Io.Limit.limited(4 * 1024 * 1024)) catch return error.ReadError;
     }
 };
 

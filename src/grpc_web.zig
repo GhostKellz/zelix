@@ -119,7 +119,7 @@ pub const GrpcWebClient = struct {
         const full_path = try self.joinPath(method_path);
         defer self.allocator.free(full_path);
 
-        const start_ns = time.nanoTimestamp();
+        const start_instant = time.Instant.now() catch unreachable;
         if (self.debug_payloads) {
             log.debug("grpc-web request {s} ({d} bytes)", .{ full_path, request_payload.len });
         }
@@ -128,13 +128,13 @@ pub const GrpcWebClient = struct {
 
         while (attempt <= self.options.max_retries) : (attempt += 1) {
             if (self.options.deadline_ns) |deadline| {
-                if (elapsedSince(start_ns) >= deadline) {
+                if (elapsedSince(start_instant) >= deadline) {
                     self.stats.total_failures += 1;
                     return Error.DeadlineExceeded;
                 }
             }
 
-            const attempt_start = time.nanoTimestamp();
+            const attempt_start = time.Instant.now() catch unreachable;
             const outcome = self.attemptStreaming(full_path, request_payload, &handler_instance) catch |err| {
                 self.stats.total_failures += 1;
                 last_err = err;
@@ -146,7 +146,8 @@ pub const GrpcWebClient = struct {
             };
 
             self.stats.total_requests += 1;
-            self.stats.last_latency_ns = elapsedBetween(attempt_start, time.nanoTimestamp());
+            const attempt_end = time.Instant.now() catch unreachable;
+            self.stats.last_latency_ns = elapsedBetween(attempt_start, attempt_end);
             self.stats.last_status_code = outcome.grpc_status;
             self.stats.last_http_status = outcome.http_status_code;
             if (self.debug_payloads) {
@@ -196,9 +197,9 @@ pub const GrpcWebClient = struct {
         };
 
         var uri = self.base_uri;
-        uri.path = full_path;
-        uri.query = "";
-        uri.fragment = "";
+        uri.path = .{ .percent_encoded = full_path };
+        uri.query = .{ .percent_encoded = "" };
+        uri.fragment = .{ .percent_encoded = "" };
 
         const framed = try frameRequest(self.allocator, request_payload);
         defer self.allocator.free(framed);
@@ -206,29 +207,35 @@ pub const GrpcWebClient = struct {
         var request = try self.http_client.request(.POST, uri, .{ .extra_headers = &extra_headers });
         defer request.deinit();
 
-        try request.start();
-        try request.writeAll(framed);
-        try request.finish();
+        try request.sendBodyComplete(framed);
+        var buf: [4096]u8 = undefined;
+        var response = try request.receiveHead(&buf);
 
-        const http_status_code: u16 = @intFromEnum(request.response.status);
+        const http_status_code: u16 = @intFromEnum(response.head.status);
 
         var parser = FrameParser.init(self.allocator);
         defer parser.deinit();
 
-        var reader = request.reader();
+        var transfer_buf: [8 * 1024]u8 = undefined;
+        var reader_inst = response.reader(&transfer_buf);
         while (true) {
-            var buf: [8 * 1024]u8 = undefined;
-            const read_bytes = try reader.read(&buf);
-            if (read_bytes == 0) break;
-            try parser.feed(buf[0..read_bytes], handler);
+            const chunk = reader_inst.peek(8 * 1024) catch |err| switch (err) {
+                error.EndOfStream => break,
+                else => return err,
+            };
+            if (chunk.len == 0) break;
+            try parser.feed(chunk, handler);
+            reader_inst.toss(chunk.len);
         }
 
-        if (request.response.headers.getFirstValue("grpc-status")) |status_str| {
-            parser.setStatusFromHeader(status_str);
-        }
-        if (parser.grpc_message == null) {
-            if (request.response.headers.getFirstValue("grpc-message")) |msg_str| {
-                parser.setMessageFromHeader(self.allocator, msg_str) catch {};
+        // Check headers via HeaderIterator
+        var it = response.head.iterateHeaders();
+        while (it.next()) |header| {
+            if (std.ascii.eqlIgnoreCase(header.name, "grpc-status")) {
+                parser.setStatusFromHeader(header.value);
+            }
+            if (parser.grpc_message == null and std.ascii.eqlIgnoreCase(header.name, "grpc-message")) {
+                parser.setMessageFromHeader(self.allocator, header.value) catch {};
             }
         }
 
@@ -287,19 +294,13 @@ const AttemptOutcome = struct {
     bytes_received: usize,
 };
 
-fn elapsedSince(start: i128) u64 {
-    const now = time.nanoTimestamp();
-    const delta = now - start;
-    if (delta <= 0) return 0;
-    if (delta > math.maxInt(u64)) return math.maxInt(u64);
-    return @intCast(delta);
+fn elapsedSince(start: time.Instant) u64 {
+    const now = time.Instant.now() catch return 0;
+    return now.since(start);
 }
 
-fn elapsedBetween(start: i128, end: i128) u64 {
-    const delta = end - start;
-    if (delta <= 0) return 0;
-    if (delta > math.maxInt(u64)) return math.maxInt(u64);
-    return @intCast(delta);
+fn elapsedBetween(start: time.Instant, end: time.Instant) u64 {
+    return end.since(start);
 }
 
 fn frameRequest(allocator: std.mem.Allocator, payload: []const u8) ![]u8 {
