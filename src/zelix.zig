@@ -10,6 +10,7 @@ pub const AccountId = @import("model.zig").AccountId;
 pub const TokenId = @import("model.zig").TokenId;
 pub const ContractId = @import("model.zig").ContractId;
 pub const TopicId = @import("model.zig").TopicId;
+pub const FileId = @import("model.zig").FileId;
 pub const TransactionId = @import("model.zig").TransactionId;
 pub const Hbar = @import("model.zig").Hbar;
 pub const Timestamp = @import("model.zig").Timestamp;
