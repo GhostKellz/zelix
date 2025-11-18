@@ -33,18 +33,51 @@ pub const ContractInfoQuery = @import("query.zig").ContractInfoQuery;
 pub const ContractCallQuery = @import("query.zig").ContractCallQuery;
 pub const TransactionReceiptQuery = @import("query.zig").TransactionReceiptQuery;
 
-// Transactions
+// Transactions - Account
 pub const CryptoTransferTransaction = @import("tx.zig").CryptoTransferTransaction;
-pub const TopicMessageSubmitTransaction = @import("tx.zig").TopicMessageSubmitTransaction;
 pub const AccountCreateTransaction = @import("tx.zig").AccountCreateTransaction;
 pub const AccountUpdateTransaction = @import("tx.zig").AccountUpdateTransaction;
 pub const AccountDeleteTransaction = @import("tx.zig").AccountDeleteTransaction;
-pub const TokenCreateTransaction = @import("tx.zig").TokenCreateTransaction;
-pub const TokenTransferTransaction = @import("tx.zig").TokenTransferTransaction;
-pub const TokenAssociateTransaction = @import("tx.zig").TokenAssociateTransaction;
-pub const TokenDissociateTransaction = @import("tx.zig").TokenDissociateTransaction;
-pub const ContractCreateTransaction = @import("tx.zig").ContractCreateTransaction;
-pub const ContractExecuteTransaction = @import("tx.zig").ContractExecuteTransaction;
+
+// Transactions - Topic/Consensus
+pub const TopicMessageSubmitTransaction = @import("tx.zig").TopicMessageSubmitTransaction;
+
+// Transactions - Token/NFT (HTS)
+pub const token_tx = @import("token_tx.zig");
+pub const TokenCreateTransaction = token_tx.TokenCreateTransaction;
+pub const TokenMintTransaction = token_tx.TokenMintTransaction;
+pub const TokenBurnTransaction = token_tx.TokenBurnTransaction;
+pub const TokenAssociateTransaction = token_tx.TokenAssociateTransaction;
+pub const TokenDissociateTransaction = token_tx.TokenDissociateTransaction;
+pub const TokenUpdateTransaction = token_tx.TokenUpdateTransaction;
+pub const TokenDeleteTransaction = token_tx.TokenDeleteTransaction;
+pub const TokenWipeTransaction = token_tx.TokenWipeTransaction;
+pub const TokenFreezeTransaction = token_tx.TokenFreezeTransaction;
+pub const TokenUnfreezeTransaction = token_tx.TokenUnfreezeTransaction;
+pub const TokenPauseTransaction = token_tx.TokenPauseTransaction;
+pub const TokenUnpauseTransaction = token_tx.TokenUnpauseTransaction;
+
+// Transactions - File Service (HFS)
+pub const file_tx = @import("file_tx.zig");
+pub const FileCreateTransaction = file_tx.FileCreateTransaction;
+pub const FileAppendTransaction = file_tx.FileAppendTransaction;
+pub const FileUpdateTransaction = file_tx.FileUpdateTransaction;
+pub const FileDeleteTransaction = file_tx.FileDeleteTransaction;
+
+// Transactions - Schedule Service
+pub const schedule_tx = @import("schedule_tx.zig");
+pub const ScheduleCreateTransaction = schedule_tx.ScheduleCreateTransaction;
+pub const ScheduleSignTransaction = schedule_tx.ScheduleSignTransaction;
+pub const ScheduleDeleteTransaction = schedule_tx.ScheduleDeleteTransaction;
+
+// Transactions - Smart Contracts
+pub const contract_tx = @import("contract_tx.zig");
+pub const ContractCreateTransaction = contract_tx.ContractCreateTransaction;
+pub const ContractExecuteTransaction = contract_tx.ContractExecuteTransaction;
+pub const ContractUpdateTransaction = contract_tx.ContractUpdateTransaction;
+pub const ContractDeleteTransaction = contract_tx.ContractDeleteTransaction;
+
+// Transaction response
 pub const TransactionResponse = @import("model.zig").TransactionResponse;
 
 // Mirror client
