@@ -236,20 +236,214 @@ fn encodeSubscribeStreamRequest(
 // Protobuf parsing functions
 
 fn parseSingleBlockResponse(allocator: std.mem.Allocator, data: []const u8) !Block {
-    // TODO: Implement full protobuf parsing
-    // For now, return a stub
-    _ = allocator;
-    _ = data;
-    return Block{
-        .block_number = 0,
-        .items = &[_]BlockItem{},
-    };
+    // Parse SingleBlockResponse message:
+    // Field 1: status (enum)
+    // Field 2: block (Block message)
+
+    var reader = proto.Reader.init(data);
+    var block_data: ?[]const u8 = null;
+
+    while (try reader.readField()) |field| {
+        switch (field.field_number) {
+            1 => {
+                // status field - we'll ignore for now, could check for errors
+                _ = field.data.varint;
+            },
+            2 => {
+                // block field (nested message)
+                block_data = field.data.bytes;
+            },
+            else => {}, // Skip unknown fields
+        }
+    }
+
+    if (block_data) |block_bytes| {
+        return try parseBlockMessage(allocator, block_bytes);
+    }
+
+    return error.MissingBlockData;
 }
 
 fn parseSubscribeStreamResponse(allocator: std.mem.Allocator, data: []const u8) !?[]BlockItem {
-    // TODO: Implement full protobuf parsing
-    // For now, return null to indicate no items
-    _ = allocator;
-    _ = data;
+    // Parse SubscribeStreamResponse message (oneof):
+    // Field 1: status (enum) - terminal message
+    // Field 2: block_items (BlockItemSet message)
+
+    var reader = proto.Reader.init(data);
+
+    while (try reader.readField()) |field| {
+        switch (field.field_number) {
+            1 => {
+                // status field - terminal message, no items
+                return null;
+            },
+            2 => {
+                // block_items field (BlockItemSet message)
+                return try parseBlockItemSet(allocator, field.data.bytes);
+            },
+            else => {}, // Skip unknown fields
+        }
+    }
+
     return null;
+}
+
+fn parseBlockMessage(allocator: std.mem.Allocator, data: []const u8) !Block {
+    // Parse Block message:
+    // Field 1: repeated BlockItem items
+
+    var items_list = std.ArrayList(BlockItem).init(allocator);
+    errdefer {
+        for (items_list.items) |*item| {
+            item.deinit(allocator);
+        }
+        items_list.deinit();
+    }
+
+    var reader = proto.Reader.init(data);
+    var block_number: u64 = 0;
+
+    while (try reader.readField()) |field| {
+        switch (field.field_number) {
+            1 => {
+                // BlockItem (repeated)
+                const item = try parseBlockItem(allocator, field.data.bytes, &block_number);
+                try items_list.append(item);
+            },
+            else => {}, // Skip unknown fields
+        }
+    }
+
+    return Block{
+        .block_number = block_number,
+        .items = try items_list.toOwnedSlice(),
+    };
+}
+
+fn parseBlockItemSet(allocator: std.mem.Allocator, data: []const u8) ![]BlockItem {
+    // Parse BlockItemSet message:
+    // Field 1: repeated BlockItem block_items
+
+    var items_list = std.ArrayList(BlockItem).init(allocator);
+    errdefer {
+        for (items_list.items) |*item| {
+            item.deinit(allocator);
+        }
+        items_list.deinit();
+    }
+
+    var reader = proto.Reader.init(data);
+    var block_number: u64 = 0;
+
+    while (try reader.readField()) |field| {
+        switch (field.field_number) {
+            1 => {
+                // BlockItem (repeated)
+                const item = try parseBlockItem(allocator, field.data.bytes, &block_number);
+                try items_list.append(item);
+            },
+            else => {}, // Skip unknown fields
+        }
+    }
+
+    return try items_list.toOwnedSlice();
+}
+
+fn parseBlockItem(allocator: std.mem.Allocator, data: []const u8, block_number: *u64) !BlockItem {
+    // Parse BlockItem message (oneof):
+    // Field 1: block_header
+    // Field 2: event_header
+    // Field 3: round_header
+    // Field 4: event_transaction
+    // Field 5: transaction_result
+    // Field 6: transaction_output
+    // Field 7: state_changes
+    // Field 8: block_proof
+    // etc.
+
+    var reader = proto.Reader.init(data);
+
+    while (try reader.readField()) |field| {
+        switch (field.field_number) {
+            1 => {
+                // block_header - extract block number if present
+                var header_reader = proto.Reader.init(field.data.bytes);
+                while (try header_reader.readField()) |header_field| {
+                    if (header_field.field_number == 1) {
+                        // Field 1 is block_number in BlockHeader
+                        block_number.* = header_field.data.varint;
+                        break;
+                    }
+                }
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .header,
+                    .data = data_copy,
+                };
+            },
+            2 => {
+                // event_header
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .start_event,
+                    .data = data_copy,
+                };
+            },
+            3 => {
+                // round_header - treat as unknown for now
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .unknown,
+                    .data = data_copy,
+                };
+            },
+            4 => {
+                // event_transaction
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .event_transaction,
+                    .data = data_copy,
+                };
+            },
+            5 => {
+                // transaction_result
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .transaction_result,
+                    .data = data_copy,
+                };
+            },
+            6 => {
+                // transaction_output
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .transaction_output,
+                    .data = data_copy,
+                };
+            },
+            7 => {
+                // state_changes
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .state_changes,
+                    .data = data_copy,
+                };
+            },
+            8, 9, 10 => {
+                // block_proof or other fields - treat as state_proof
+                const data_copy = try allocator.dupe(u8, field.data.bytes);
+                return BlockItem{
+                    .item_type = .state_proof,
+                    .data = data_copy,
+                };
+            },
+            else => {}, // Skip unknown fields
+        }
+    }
+
+    // Return empty unknown item if no recognized field found
+    return BlockItem{
+        .item_type = .unknown,
+        .data = &[_]u8{},
+    };
 }

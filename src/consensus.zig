@@ -609,14 +609,17 @@ pub const ConsensusClient = struct {
         var request = try self.http_client.request(.POST, uri, .{ .extra_headers = &headers });
         defer request.deinit();
 
-        try request.start();
-        try request.writeAll(payload);
-        try request.finish();
-        try request.wait();
+        try request.sendBodyComplete(payload);
 
-        const status = request.response.status;
+        var redirect_buffer: [4096]u8 = undefined;
+        const response = try request.receiveHead(&redirect_buffer);
+
+        const status = response.head.status;
         const status_code: u16 = @intFromEnum(status);
-        const body = try request.reader().readAllAlloc(self.allocator, 1 * 1024 * 1024);
+
+        var transfer_buffer: [4096]u8 = undefined;
+        const body_reader = response.reader(&transfer_buffer);
+        const body = try body_reader.readAllAlloc(self.allocator, 1 * 1024 * 1024);
         defer self.allocator.free(body);
 
         switch (status) {

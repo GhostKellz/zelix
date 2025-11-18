@@ -7,6 +7,7 @@ const mirror_parse = @import("mirror_parse.zig");
 const grpc_web = @import("grpc_web.zig");
 const mirror_proto = @import("mirror_proto.zig");
 const block_stream = @import("block_stream.zig");
+const block_parser = @import("block_parser.zig");
 
 const fmt = std.fmt;
 const mem = std.mem;
@@ -1061,8 +1062,16 @@ pub const MirrorClient = struct {
         const block_client = try self.getBlockStreamClient();
 
         // Determine starting block number
-        // TODO: Convert timestamp to block number if start_time is provided
-        const start_block: u64 = 0; // 0 means current/latest
+        const start_block: u64 = if (options.start_time) |start_time| blk: {
+            // Network genesis timestamp for Hedera (mainnet: 2018-08-24, testnet: similar)
+            // Using a reasonable default - applications can adjust if needed
+            const network_genesis = model.Timestamp{
+                .seconds = 1535097600, // August 24, 2018 00:00:00 UTC (approximate mainnet start)
+                .nanos = 0,
+            };
+            break :blk block_stream.BlockStreamClient.timestampToBlockNumber(start_time, network_genesis);
+        } else 0; // 0 means current/latest
+
         const end_block: u64 = 0; // 0 means infinite stream
 
         log.info("Starting block stream from block {d} (end: {d})", .{ start_block, end_block });
@@ -1400,23 +1409,11 @@ pub const TopicMessage = struct {
 
 // Helper function to extract TransactionRecord from block stream data
 fn extractTransactionRecord(allocator: std.mem.Allocator, data: []const u8) !model.TransactionRecord {
-    // TODO: Implement full protobuf parsing of event_transaction BlockItem
-    // For now, return a stub record
-    _ = data;
-    return model.TransactionRecord{
-        .transaction_id = model.TransactionId{
-            .account_id = model.AccountId{ .shard = 0, .realm = 0, .num = 0 },
-            .valid_start = model.Timestamp{ .seconds = 0, .nanos = 0 },
-            .scheduled = false,
-            .nonce = null,
-        },
-        .consensus_timestamp = model.Timestamp{ .seconds = 0, .nanos = 0 },
-        .transfers = &[_]model.Transfer{},
-        .memo = try allocator.dupe(u8, ""),
-        .fee = model.Hbar.ZERO,
-        .result = .SUCCESS,
-        .is_duplicate = false,
-        .is_child = false,
-    };
+    // Parse the event_transaction BlockItem using block_parser
+    var parsed_tx = try block_parser.parseEventTransaction(allocator, data);
+    defer parsed_tx.deinit(allocator);
+
+    // Convert ParsedTransaction to TransactionRecord
+    return try parsed_tx.toTransactionRecord(allocator);
 }
 

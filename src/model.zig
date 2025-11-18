@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const crypto = @import("crypto.zig");
+const abi = @import("abi.zig");
 
 fn freeConstSlice(allocator: std.mem.Allocator, slice: []const u8) void {
     if (slice.len == 0) return;
@@ -368,11 +369,75 @@ test "Timestamp fromString" {
     try std.testing.expectError(error.InvalidFormat, Timestamp.fromString("1700.2000000000"));
 }
 
+/// Hedera transaction status codes
+/// Based on ResponseCode enum from Hedera protobufs
 pub const TransactionStatus = enum {
-    success,
-    failed,
+    // Precheck statuses
+    ok,
+    invalid_transaction,
+    payer_account_not_found,
+    invalid_node_account,
+    transaction_expired,
+    invalid_transaction_start,
+    invalid_transaction_duration,
+    busy,
+    not_supported,
+    invalid_file_id,
+    insufficient_tx_fee,
+    insufficient_payer_balance,
+    duplicate_transaction,
+    busy_retry,
+    not_supported_fee,
+    insufficient_account_balance,
+
+    // Execution statuses
     unknown,
-    // TODO: Add more status codes from Hedera
+    success,
+    fail_invalid,
+    fail_fee,
+    fail_balance,
+
+    // Legacy/compatibility statuses
+    failed, // Generic failure status for backward compatibility
+
+    // Legacy aliases for compatibility
+    pub const OK = TransactionStatus.ok;
+    pub const SUCCESS = TransactionStatus.success;
+    pub const UNKNOWN = TransactionStatus.unknown;
+    pub const FAILED = TransactionStatus.failed;
+
+    /// Convert from Hedera response code number
+    pub fn fromCode(code: u32) TransactionStatus {
+        return switch (code) {
+            0 => .ok,
+            1 => .invalid_transaction,
+            2 => .payer_account_not_found,
+            3 => .invalid_node_account,
+            4 => .transaction_expired,
+            5 => .invalid_transaction_start,
+            6 => .invalid_transaction_duration,
+            7 => .busy,
+            8 => .not_supported,
+            9 => .invalid_file_id,
+            10 => .insufficient_tx_fee,
+            11 => .insufficient_payer_balance,
+            12 => .duplicate_transaction,
+            13 => .busy_retry,
+            14 => .not_supported_fee,
+            15 => .insufficient_account_balance,
+            21 => .unknown,
+            22 => .success,
+            23 => .fail_invalid,
+            24 => .fail_fee,
+            25 => .fail_balance,
+            else => .unknown,
+        };
+    }
+
+    /// Check if this status indicates success
+    pub fn isSuccess(self: TransactionStatus) bool {
+        return self == .ok or self == .success;
+    }
 };
 
 // Token Types
@@ -627,7 +692,47 @@ pub const ContractFunctionParameters = struct {
         return .{ .data = str };
     }
 
-    // TODO: Add ABI encoding/decoding helpers
+    /// Create function parameters from ABI-encoded function call
+    /// The function_signature should be in the form "transfer(address,uint256)"
+    pub fn fromAbiCall(
+        allocator: std.mem.Allocator,
+        function_signature: []const u8,
+        params: []const abi.AbiValue,
+    ) !ContractFunctionParameters {
+        const encoded = try abi.encodeFunctionCall(allocator, function_signature, params);
+        return .{ .data = encoded };
+    }
+
+    /// Create function parameters from just ABI-encoded parameters (no selector)
+    pub fn fromAbiParameters(
+        allocator: std.mem.Allocator,
+        params: []const abi.AbiValue,
+    ) !ContractFunctionParameters {
+        const encoded = try abi.encodeParameters(allocator, params);
+        return .{ .data = encoded };
+    }
+
+    /// Convenience: encode a single uint256 parameter
+    pub fn fromUint256(allocator: std.mem.Allocator, value: u256) !ContractFunctionParameters {
+        const params = [_]abi.AbiValue{.{ .uint256 = value }};
+        return try fromAbiParameters(allocator, &params);
+    }
+
+    /// Convenience: encode a single address parameter
+    pub fn fromAddress(allocator: std.mem.Allocator, address: [20]u8) !ContractFunctionParameters {
+        const params = [_]abi.AbiValue{.{ .address = address }};
+        return try fromAbiParameters(allocator, &params);
+    }
+
+    /// Convenience: encode a single string parameter
+    pub fn fromStringParam(allocator: std.mem.Allocator, value: []const u8) !ContractFunctionParameters {
+        const params = [_]abi.AbiValue{.{ .string_value = value }};
+        return try fromAbiParameters(allocator, &params);
+    }
+
+    pub fn deinit(self: *ContractFunctionParameters, allocator: std.mem.Allocator) void {
+        freeConstSlice(allocator, self.data);
+    }
 };
 
 pub const ContractFunctionResult = struct {
