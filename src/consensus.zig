@@ -277,7 +277,8 @@ pub const ConsensusClient = struct {
         grpc_endpoint: ?[]u8 = null,
         grpc_client: ?grpc_web.GrpcWebClient = null,
         consecutive_failures: usize = 0,
-        cooldown_until_ns: i128 = 0,
+        cooldown_until: std.time.Instant = undefined,
+        cooldown_active: bool = false,
     };
 
     pub fn init(options: InitOptions) !ConsensusClient {
@@ -398,26 +399,30 @@ pub const ConsensusClient = struct {
         if (!node.healthy) {
             if (self.node_cooldown_ns == 0) {
                 node.consecutive_failures = 0;
-                node.cooldown_until_ns = 0;
+                node.cooldown_active = false;
                 node.healthy = true;
                 return true;
             }
 
-            const now = (try std.time.Instant.now()).timestamp;
-            if (now >= node.cooldown_until_ns) {
-                node.consecutive_failures = 0;
-                node.cooldown_until_ns = 0;
-                node.healthy = true;
-                return true;
+            if (node.cooldown_active) {
+                const now = std.time.Instant.now() catch return false;
+                if (now.since(node.cooldown_until) > 0) {
+                    // Cooldown expired
+                    node.consecutive_failures = 0;
+                    node.cooldown_active = false;
+                    node.healthy = true;
+                    return true;
+                }
+                return false;
             }
-            return false;
+            return true;
         }
         return true;
     }
 
     fn registerNodeSuccess(_: *ConsensusClient, node: *NodeEndpoint) void {
         node.consecutive_failures = 0;
-        node.cooldown_until_ns = 0;
+        node.cooldown_active = false;
         node.healthy = true;
     }
 
@@ -430,9 +435,8 @@ pub const ConsensusClient = struct {
 
     fn applyCooldown(self: *ConsensusClient, node: *NodeEndpoint) void {
         node.healthy = false;
-        const now = (std.time.Instant.now() catch unreachable).timestamp;
-        const delta: i128 = @intCast(self.node_cooldown_ns);
-        node.cooldown_until_ns = now + delta;
+        node.cooldown_until = std.time.Instant.now() catch unreachable;
+        node.cooldown_active = true;
         log.warn("marking node {d}.{d}.{d} unhealthy for {d} ms", .{
             node.account_id.shard,
             node.account_id.realm,
