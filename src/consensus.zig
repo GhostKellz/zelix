@@ -619,7 +619,7 @@ pub const ConsensusClient = struct {
 
         var transfer_buffer: [4096]u8 = undefined;
         const body_reader = response.reader(&transfer_buffer);
-        const body = try body_reader.*.readAllAlloc(self.allocator, 1 * 1024 * 1024);
+        const body = try body_reader.*.allocRemaining(self.allocator, 1 * 1024 * 1024);
         defer self.allocator.free(body);
 
         switch (status) {

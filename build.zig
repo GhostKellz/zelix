@@ -183,6 +183,19 @@ pub fn build(b: *std.Build) void {
     const perf_step = b.step("test-perf", "Run performance benchmarks");
     perf_step.dependOn(&run_perf_tests.step);
 
+    // API compatibility test - compile check only, no execution
+    const api_test_module = b.createModule(.{
+        .root_source_file = b.path("tests/api_compile_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "zelix", .module = mod }},
+    });
+
+    const api_tests = b.addTest(.{ .root_module = api_test_module });
+    const run_api_tests = b.addRunArtifact(api_tests);
+    const api_step = b.step("test-api", "Run API compatibility tests");
+    api_step.dependOn(&run_api_tests.step);
+
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means
