@@ -489,7 +489,9 @@ pub const ConsensusClient = struct {
                 last_err = err;
                 if (attempt + 1 < attempts) {
                     const backoff_ns = self.computeGrpcRetryDelay(attempt);
-                    std.time.sleep(backoff_ns);
+                    const secs = backoff_ns / std.time.ns_per_s;
+                    const nanos = backoff_ns % std.time.ns_per_s;
+                    std.posix.nanosleep(secs, nanos);
                 }
                 continue;
             };
@@ -550,7 +552,9 @@ pub const ConsensusClient = struct {
                     const shift: u6 = @intCast(attempt);
                     const delay_ms: u64 = 200 * (@as(u64, 1) << shift);
                     const backoff = std.time.ns_per_ms * delay_ms;
-                    std.time.sleep(backoff);
+                    const secs = backoff / std.time.ns_per_s;
+                    const nanos = backoff % std.time.ns_per_s;
+                    std.posix.nanosleep(secs, nanos);
                 }
                 continue;
             };
@@ -844,7 +848,9 @@ pub const ConsensusClient = struct {
             const remaining = timeout_ns - elapsed;
             const sleep_ns = if (poll_ns < remaining) poll_ns else remaining;
             if (sleep_ns == 0) break;
-            std.time.sleep(sleep_ns);
+            const secs = sleep_ns / std.time.ns_per_s;
+            const nanos = sleep_ns % std.time.ns_per_s;
+            std.posix.nanosleep(secs, nanos);
         }
 
         return error.ReceiptTimedOut;
@@ -931,7 +937,10 @@ pub const ConsensusClient = struct {
                 last_err = err;
                 if (attempt + 1 < attempts) {
                     const backoff_ms: u64 = 200 * (@as(u64, 1) << @intCast(attempt));
-                    std.time.sleep(backoff_ms * std.time.ns_per_ms);
+                    const backoff_ns = backoff_ms * std.time.ns_per_ms;
+                    const secs = backoff_ns / std.time.ns_per_s;
+                    const nanos = backoff_ns % std.time.ns_per_s;
+                    std.posix.nanosleep(secs, nanos);
                 }
                 continue;
             };

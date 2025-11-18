@@ -294,7 +294,7 @@ pub const MirrorClient = struct {
         options: TransactionReceiptQueryOptions,
     ) !model.TransactionReceipt {
         return switch (self.transport) {
-            .rest => try self.getTransactionReceiptRest(tx_id, options),
+            .rest, .block_stream => try self.getTransactionReceiptRest(tx_id, options),
             .grpc => self.getTransactionReceiptGrpc(tx_id, options) catch |err| {
                 self.logGrpcFallback("getTransactionReceipt", err);
                 return try self.getTransactionReceiptRest(tx_id, options);
@@ -308,7 +308,7 @@ pub const MirrorClient = struct {
         options: TransactionRecordQueryOptions,
     ) !model.TransactionRecord {
         return switch (self.transport) {
-            .rest => try self.getTransactionRecordRest(tx_id, options),
+            .rest, .block_stream => try self.getTransactionRecordRest(tx_id, options),
             .grpc => self.getTransactionRecordGrpc(tx_id, options) catch |err| {
                 self.logGrpcFallback("getTransactionRecord", err);
                 return try self.getTransactionRecordRest(tx_id, options);
@@ -416,7 +416,9 @@ pub const MirrorClient = struct {
 
             const remaining = options.timeout_ns - elapsed;
             const sleep_ns = if (poll_ns > remaining) remaining else poll_ns;
-            std.time.sleep(sleep_ns);
+            const secs = sleep_ns / std.time.ns_per_s;
+            const nanos = sleep_ns % std.time.ns_per_s;
+            std.posix.nanosleep(secs, nanos);
 
             if (multiplier > 1 and poll_ns < options.max_poll_ns) {
                 const next_poll = poll_ns * multiplier;
@@ -434,14 +436,14 @@ pub const MirrorClient = struct {
         next: ?[]const u8,
     ) !struct { messages: []TopicMessage, next: ?[]u8 } {
         return switch (self.transport) {
-            .rest => try self.getTopicMessagesRest(topic_id, limit, next),
+            .rest, .block_stream => try self.getTopicMessagesRest(topic_id, limit, next),
             .grpc => try self.getTopicMessagesGrpc(topic_id, limit, next),
         };
     }
 
     pub fn subscribeTopic(self: *MirrorClient, topic_id: model.TopicId, callback: fn (msg: TopicMessage) void) !void {
         return switch (self.transport) {
-            .rest => self.subscribeTopicRest(topic_id, callback),
+            .rest, .block_stream => self.subscribeTopicRest(topic_id, callback),
             .grpc => self.subscribeTopicGrpc(topic_id, callback) catch |err| {
                 log.warn("mirror gRPC subscribeTopic unavailable: {s}; falling back to REST", .{@errorName(err)});
                 return self.subscribeTopicRest(topic_id, callback);
@@ -470,7 +472,7 @@ pub const MirrorClient = struct {
                 if (cursor) |old| self.allocator.free(old);
                 cursor = try self.allocator.dupe(u8, token);
             } else {
-                std.time.sleep(5 * std.time.ns_per_s);
+                std.posix.nanosleep(5, 0);
             }
         }
     }
@@ -524,13 +526,15 @@ pub const MirrorClient = struct {
                 handler,
             ) catch |err| {
                 log.warn("mirror gRPC subscribeTopic failed: {s}", .{@errorName(err)});
-                std.time.sleep(reconnect_delay_ns);
+                const secs = reconnect_delay_ns / std.time.ns_per_s;
+                const nanos = reconnect_delay_ns % std.time.ns_per_s;
+                std.posix.nanosleep(secs, nanos);
                 if (reconnect_delay_ns < 5 * std.time.ns_per_s) reconnect_delay_ns *= 2;
                 continue;
             };
 
             if (!received) {
-                std.time.sleep(2 * std.time.ns_per_s);
+                std.posix.nanosleep(2, 0);
             }
 
             reconnect_delay_ns = 500 * std.time.ns_per_ms;
@@ -598,7 +602,7 @@ pub const MirrorClient = struct {
         const response = try self.callGrpcUnary("/proto.CryptoService/getAccountInfo", request);
         defer self.allocator.free(response);
 
-        const decoded = try mirror_proto.decodeAccountInfoResponse(self.allocator, response, account_id);
+        var decoded = try mirror_proto.decodeAccountInfoResponse(self.allocator, response, account_id);
         errdefer decoded.info.deinit(self.allocator);
 
         var allowances = try self.getAccountAllowancesGrpc(account_id);
@@ -680,7 +684,7 @@ pub const MirrorClient = struct {
         const response = try self.callGrpcUnary("/proto.CryptoService/getTransactionReceipts", request);
         defer self.allocator.free(response);
 
-        return try mirror_proto.decodeTransactionReceiptResponse(response, tx_id);
+        return try mirror_proto.decodeTransactionReceiptResponse(self.allocator, response, tx_id);
     }
 
     fn getTransactionRecordRest(
@@ -941,7 +945,9 @@ pub const MirrorClient = struct {
             }
 
             if (page_next == null) {
-                std.time.sleep(poll_ns);
+                const secs = poll_ns / std.time.ns_per_s;
+                const nanos = poll_ns % std.time.ns_per_s;
+                std.posix.nanosleep(secs, nanos);
             }
         }
     }
@@ -989,7 +995,9 @@ pub const MirrorClient = struct {
                     return err;
                 }
 
-                std.time.sleep(current_backoff);
+                const secs = current_backoff / std.time.ns_per_s;
+                const nanos = current_backoff % std.time.ns_per_s;
+                std.posix.nanosleep(secs, nanos);
                 current_backoff = @min(current_backoff * 2, max_backoff);
                 continue;
             };
@@ -1035,7 +1043,9 @@ pub const MirrorClient = struct {
             }
 
             if (page_next == null) {
-                std.time.sleep(poll_ns);
+                const secs = poll_ns / std.time.ns_per_s;
+                const nanos = poll_ns % std.time.ns_per_s;
+                std.posix.nanosleep(secs, nanos);
             }
         }
     }

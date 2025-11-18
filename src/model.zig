@@ -172,10 +172,8 @@ pub const Hbar = struct {
     //     return @floatFromInt(self.tinybars) / 100_000_000.0;
     // }
 
-    pub fn format(self: Hbar, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-        try writer.print("{d} tℏ", .{self.tinybars});
+    pub fn format(self: Hbar, writer: anytype) !void {
+        try writer.print("{d}", .{self.tinybars});
     }
 };
 
@@ -278,7 +276,28 @@ pub const Transfer = struct {
 pub const TransactionReceipt = struct {
     status: TransactionStatus,
     transaction_id: TransactionId,
-    // TODO: Add consensus_timestamp, account_id, etc.
+    account_id: ?AccountId = null,
+    file_id: ?FileId = null,
+    contract_id: ?ContractId = null,
+    topic_id: ?TopicId = null,
+    token_id: ?TokenId = null,
+    schedule_id: ?ScheduleId = null,
+    scheduled_transaction_id: ?TransactionId = null,
+    serial_numbers: std.ArrayList(i64) = .{},
+    duplicates: std.ArrayList(TransactionReceipt) = .{},
+    children: std.ArrayList(TransactionReceipt) = .{},
+
+    pub fn deinit(self: *TransactionReceipt, allocator: std.mem.Allocator) void {
+        self.serial_numbers.deinit(allocator);
+        for (self.duplicates.items) |*dup| {
+            dup.deinit(allocator);
+        }
+        self.duplicates.deinit(allocator);
+        for (self.children.items) |*child| {
+            child.deinit(allocator);
+        }
+        self.children.deinit(allocator);
+    }
 };
 
 pub const TransactionResponse = struct {

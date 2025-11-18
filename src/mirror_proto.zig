@@ -181,9 +181,11 @@ pub fn decodeAccountDetailsAllowances(
 }
 
 pub fn decodeTransactionReceiptResponse(
+    allocator: std.mem.Allocator,
     payload: []const u8,
     expected_transaction_id: model.TransactionId,
 ) !model.TransactionReceipt {
+    _ = allocator;
     const wrapper = try extractResponseMessage(payload, 14);
     const receipt_bytes = try extractResponseMessage(wrapper, 2);
     return decodeTransactionReceiptMessage(receipt_bytes, expected_transaction_id);
@@ -647,7 +649,10 @@ fn decodeTransactionReceiptMessage(bytes: []const u8, expected_transaction_id: m
     }
 
     const status = mapResponseCode(status_code);
-    return model.TransactionReceipt{ .status = status, .transaction_id = expected_transaction_id };
+    return model.TransactionReceipt{
+        .status = status,
+        .transaction_id = expected_transaction_id,
+    };
 }
 
 fn decodeTransactionRecordMessage(
@@ -1307,13 +1312,13 @@ test "decode token info response" {
 }
 
 fn readVarint(data: []const u8, index: *usize) !u64 {
-    var shift: u7 = 0;
+    var shift: u6 = 0;
     var result: u64 = 0;
     while (true) {
         if (index.* >= data.len) return error.UnexpectedEndOfStream;
         const byte = data[index.*];
         index.* += 1;
-        result |= (@as(u64, byte & 0x7F) << shift);
+        result |= (@as(u64, byte & 0x7F) << @as(u6, @intCast(shift)));
         if ((byte & 0x80) == 0) break;
         shift += 7;
         if (shift >= 64) return error.VarintOverflow;

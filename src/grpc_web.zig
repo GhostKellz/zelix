@@ -258,7 +258,9 @@ pub const GrpcWebClient = struct {
     fn sleepBackoff(self: *GrpcWebClient, attempt: usize) void {
         const backoff = self.computeBackoff(attempt);
         if (backoff == 0) return;
-        time.sleep(backoff);
+        const seconds = backoff / std.time.ns_per_s;
+        const nanos = backoff % std.time.ns_per_s;
+        std.posix.nanosleep(seconds, nanos);
     }
 
     fn computeBackoff(self: *const GrpcWebClient, attempt: usize) u64 {

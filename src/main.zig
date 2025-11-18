@@ -99,29 +99,28 @@ fn cmdAccount(allocator: std.mem.Allocator, args: []const [:0]u8) !void {
         account_id.num,
     });
 
-    const info = client.getAccountInfo(account_id) catch |err| {
+    var detailed_info = client.getAccountInfo(account_id) catch |err| {
         std.debug.print("Error: Failed to get account info: {s}\n", .{@errorName(err)});
         std.process.exit(1);
     };
-    defer info.deinit(allocator);
+    defer detailed_info.deinit(allocator);
 
-    std.debug.print("\nAccount: {d}.{d}.{d}\n", .{ info.account_id.shard, info.account_id.realm, info.account_id.num });
-    std.debug.print("Balance: {} tinybar\n", .{info.balance});
+    std.debug.print("\nAccount: {d}.{d}.{d}\n", .{ detailed_info.info.account_id.shard, detailed_info.info.account_id.realm, detailed_info.info.account_id.num });
+    std.debug.print("Balance: {f} tinybar\n", .{detailed_info.balance});
 
-    if (info.alias.len > 0) {
-        std.debug.print("Alias: ", .{});
-        for (info.alias) |byte| {
-            std.debug.print("{x:0>2}", .{byte});
-        }
-        std.debug.print("\n", .{});
+    if (detailed_info.info.alias_key) |alias| {
+        std.debug.print("Alias: {s}\n", .{alias});
     }
 
-    if (info.key) |key| {
-        std.debug.print("Key: {s}\n", .{key});
+    if (detailed_info.info.key) |key| {
+        _ = key;
+        std.debug.print("Key: [present]\n", .{});
     }
 
-    std.debug.print("Deleted: {}\n", .{info.deleted});
-    std.debug.print("Auto Renew Period: {} seconds\n", .{info.auto_renew_period_seconds});
+    std.debug.print("Deleted: {}\n", .{detailed_info.info.deleted});
+    if (detailed_info.info.auto_renew_period) |period| {
+        std.debug.print("Auto Renew Period: {} seconds\n", .{period});
+    }
 }
 
 fn cmdToken(allocator: std.mem.Allocator, args: []const [:0]u8) !void {
@@ -161,9 +160,8 @@ fn cmdToken(allocator: std.mem.Allocator, args: []const [:0]u8) !void {
     std.debug.print("Total Supply: {}\n", .{info.total_supply});
     std.debug.print("Type: {s}\n", .{@tagName(info.token_type)});
 
-    if (info.treasury_account_id) |treasury| {
-        std.debug.print("Treasury: {d}.{d}.{d}\n", .{ treasury.shard, treasury.realm, treasury.num });
-    }
+    const treasury = info.treasury_account_id;
+    std.debug.print("Treasury: {d}.{d}.{d}\n", .{ treasury.shard, treasury.realm, treasury.num });
 }
 
 fn cmdNft(allocator: std.mem.Allocator, args: []const [:0]u8) !void {
@@ -209,9 +207,8 @@ fn cmdNft(allocator: std.mem.Allocator, args: []const [:0]u8) !void {
         info.id.serial,
     });
 
-    if (info.account_id) |owner| {
-        std.debug.print("Owner: {d}.{d}.{d}\n", .{ owner.shard, owner.realm, owner.num });
-    }
+    const owner = info.owner_account_id;
+    std.debug.print("Owner: {d}.{d}.{d}\n", .{ owner.shard, owner.realm, owner.num });
 
     std.debug.print("Created: {}\n", .{info.created_timestamp.seconds});
 
@@ -253,7 +250,7 @@ fn cmdTransaction(allocator: std.mem.Allocator, args: []const [:0]u8) !void {
         std.process.exit(1);
     }
 
-    const tx_id = zelix.TransactionId.fromString(args[0]) catch |err| {
+    const tx_id = zelix.TransactionId.parse(args[0]) catch |err| {
         std.debug.print("Error: Invalid transaction ID '{s}': {s}\n", .{ args[0], @errorName(err) });
         std.process.exit(1);
     };
@@ -266,7 +263,7 @@ fn cmdTransaction(allocator: std.mem.Allocator, args: []const [:0]u8) !void {
 
     std.debug.print("Fetching transaction receipt...\n", .{});
 
-    const receipt = client.getTransactionReceipt(tx_id) catch |err| {
+    var receipt = client.getTransactionReceipt(tx_id) catch |err| {
         std.debug.print("Error: Failed to get transaction receipt: {s}\n", .{@errorName(err)});
         std.process.exit(1);
     };

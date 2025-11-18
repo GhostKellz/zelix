@@ -150,11 +150,11 @@ pub const Client = struct {
         return try self.mirror_client.getAccountBalance(account_id);
     }
 
-    pub fn getAccountInfo(self: *Client, account_id: model.AccountId) !model.AccountInfo {
-        var detailed = try self.mirror_client.getAccountInfoDetailed(account_id);
-        defer detailed.allowances.deinit(self.allocator);
-        return detailed.info;
+    pub fn getAccountInfo(self: *Client, account_id: model.AccountId) !DetailedAccountInfo {
+        return try self.mirror_client.getAccountInfoDetailed(account_id);
     }
+
+    const DetailedAccountInfo = @import("mirror.zig").MirrorClient.DetailedAccountInfo;
 
     pub fn getAccountRecords(self: *Client, account_id: model.AccountId) !model.AccountRecords {
         const body = try self.mirror_client.getJson("{s}/accounts/{d}.{d}.{d}/transactions", .{

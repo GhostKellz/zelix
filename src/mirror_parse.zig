@@ -18,6 +18,8 @@ pub const ParseError = error{
     InvalidType,
     InvalidFormat,
     OutOfMemory,
+    InvalidCharacter,
+    Overflow,
 };
 
 fn dupString(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
@@ -751,7 +753,10 @@ pub fn parseTransactionReceipt(
     const tx_obj = try getTransactionObjectAt(tx_array, 0);
 
     const status = try parseTransactionStatusField(tx_obj);
-    return model.TransactionReceipt{ .status = status, .transaction_id = expected_transaction_id };
+    return model.TransactionReceipt{
+        .status = status,
+        .transaction_id = expected_transaction_id,
+    };
 }
 
 fn mapTokenType(token_type: []const u8) ParseError!model.TokenType {
@@ -931,7 +936,10 @@ pub fn parseNftInfo(
     }
 
     const serial_number = switch (try getField(obj, "serial_number")) {
-        .integer => |i| if (i < 0) ParseError.InvalidFormat else @as(u64, @intCast(i)),
+        .integer => |i| blk: {
+            if (i < 0) return ParseError.InvalidFormat;
+            break :blk @as(u64, @intCast(i));
+        },
         .string => |s| try std.fmt.parseInt(u64, s, 10),
         else => return ParseError.InvalidType,
     };
