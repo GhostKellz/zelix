@@ -612,7 +612,7 @@ pub const ConsensusClient = struct {
         try request.sendBodyComplete(payload);
 
         var redirect_buffer: [4096]u8 = undefined;
-        const response = try request.receiveHead(&redirect_buffer);
+        var response = try request.receiveHead(&redirect_buffer);
 
         const status = response.head.status;
         const status_code: u16 = @intFromEnum(status);
