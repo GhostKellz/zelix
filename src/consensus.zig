@@ -467,10 +467,10 @@ pub const ConsensusClient = struct {
 
         if (self.submit_url.len > 0) {
             return self.submitTransactionRest(tx_bytes) catch |err| {
-                return switch (grpc_err) {
-                    null => err,
-                    else => |prev| prev,
-                };
+                if (grpc_err) |prev| {
+                    return prev;
+                }
+                return err;
             };
         }
 
@@ -619,7 +619,7 @@ pub const ConsensusClient = struct {
 
         var transfer_buffer: [4096]u8 = undefined;
         const body_reader = response.reader(&transfer_buffer);
-        const body = try body_reader.*.allocRemaining(self.allocator, 1 * 1024 * 1024);
+        const body = try body_reader.*.allocRemaining(self.allocator, std.Io.Limit.limited(1 * 1024 * 1024));
         defer self.allocator.free(body);
 
         switch (status) {
@@ -851,6 +851,7 @@ pub const ConsensusClient = struct {
                     const receipt = receipt_response.receipt;
                     if (receipt.status != .unknown) return receipt;
                 },
+                else => return error.UnexpectedResponse,
             }
 
             const elapsed = timer.read();
@@ -967,6 +968,79 @@ pub const ConsensusClient = struct {
         log.err("query failed after {d} attempt(s) ({d} ms): {s}", .{ attempts, elapsed_ms, @errorName(last_err orelse error.QueryFailed) });
         return last_err orelse error.QueryFailed;
     }
+
+    fn parseSubmissionResponse(self: *ConsensusClient, body: []const u8, status_code: u16) !model.TransactionResponse {
+        var parsed = try json.parseFromSlice(json.Value, self.allocator, body, .{});
+        defer parsed.deinit();
+
+        const obj = switch (parsed.value) {
+            .object => |o| o,
+            else => return error.ParseError,
+        };
+
+        var tx_id: ?model.TransactionId = null;
+        if (obj.get("transactionId")) |tx_value| {
+            const tx_str = switch (tx_value) {
+                .string => |s| s,
+                else => return error.ParseError,
+            };
+            tx_id = try model.TransactionId.parse(tx_str);
+        }
+
+        const node_id = try parseOptionalNodeId(obj.get("nodeId"));
+        const status_copy = try copyOptionalString(self.allocator, obj.get("status"));
+        const hash_copy = try dupOptionalString(self.allocator, obj.get("hash"));
+
+        return .{
+            .transaction_id = tx_id,
+            .node_id = node_id,
+            .status = status_copy,
+            .hash = hash_copy,
+            .status_code = status_code,
+            .error_message = null,
+            .success = true,
+        };
+    }
+
+    fn parseErrorResponse(self: *ConsensusClient, body: []const u8, status_code: u16) !model.TransactionResponse {
+        var parsed = try json.parseFromSlice(json.Value, self.allocator, body, .{});
+        defer parsed.deinit();
+
+        const obj = switch (parsed.value) {
+            .object => |o| o,
+            else => return error.ParseError,
+        };
+
+        var tx_id: ?model.TransactionId = null;
+        if (obj.get("transactionId")) |tx_value| {
+            const tx_str = switch (tx_value) {
+                .string => |s| s,
+                else => return error.ParseError,
+            };
+            tx_id = try model.TransactionId.parse(tx_str);
+        }
+
+        const status_copy = try copyOptionalString(self.allocator, obj.get("status"));
+        const hash_copy = try dupOptionalString(self.allocator, obj.get("hash"));
+        const message_copy = try dupOptionalString(self.allocator, obj.get("message"));
+
+        const node_id = try parseOptionalNodeId(obj.get("nodeId"));
+
+        const response = model.TransactionResponse{
+            .transaction_id = tx_id,
+            .node_id = node_id,
+            .status = status_copy,
+            .hash = hash_copy,
+            .status_code = status_code,
+            .error_message = message_copy,
+            .success = false,
+        };
+
+        const log_message = if (message_copy) |msg| msg else status_copy;
+        log.err("submit rejected {d}: {s}", .{ status_code, log_message });
+
+        return response;
+    }
 };
 
 fn determineSubmitUrl(options: ConsensusClient.InitOptions) !?[]u8 {
@@ -1014,101 +1088,6 @@ fn parseOptionalNodeId(value: ?json.Value) !?model.AccountId {
         else => return error.ParseError,
     };
     return null;
-}
-
-fn parseSubmissionResponse(self: *ConsensusClient, body: []const u8, status_code: u16) !model.TransactionResponse {
-    var parsed = try json.parseFromSlice(json.Value, self.allocator, body, .{});
-    defer parsed.deinit();
-
-    const obj = switch (parsed.value) {
-        .object => |o| o,
-        else => return error.ParseError,
-    };
-
-    const tx_id_value = obj.get("transactionId") orelse return error.ParseError;
-    const tx_id_str = switch (tx_id_value) {
-        .string => |s| s,
-        else => return error.ParseError,
-    };
-
-    const transaction_id = try model.TransactionId.parse(tx_id_str);
-
-    const status_copy = try copyOptionalString(self.allocator, obj.get("status"));
-    errdefer if (status_copy.len > 0) self.allocator.free(status_copy);
-
-    var hash_copy: ?[]u8 = null;
-    if (obj.get("hash")) |hash_val| switch (hash_val) {
-        .string => |s| hash_copy = try self.allocator.dupe(u8, s),
-        .null => {},
-        else => return error.ParseError,
-    };
-    errdefer if (hash_copy) |h| self.allocator.free(h);
-
-    const node_id = try parseOptionalNodeId(obj.get("nodeId"));
-
-    return model.TransactionResponse{
-        .transaction_id = transaction_id,
-        .node_id = node_id,
-        .status = status_copy,
-        .hash = hash_copy,
-        .status_code = status_code,
-        .success = true,
-    };
-}
-
-fn parseErrorResponse(self: *ConsensusClient, body: []const u8, status_code: u16) !model.TransactionResponse {
-    var parsed = try json.parseFromSlice(json.Value, self.allocator, body, .{});
-    defer parsed.deinit();
-
-    const obj = switch (parsed.value) {
-        .object => |o| o,
-        else => return error.ParseError,
-    };
-
-    var tx_id: ?model.TransactionId = null;
-    if (obj.get("transactionId")) |tx_value| {
-        const tx_str = switch (tx_value) {
-            .string => |s| s,
-            else => return error.ParseError,
-        };
-        tx_id = try model.TransactionId.parse(tx_str);
-    }
-
-    var status_value: ?json.Value = obj.get("status");
-    if (status_value == null) status_value = obj.get("error");
-    const status_copy = try copyOptionalString(self.allocator, status_value);
-    errdefer if (status_copy.len > 0) self.allocator.free(status_copy);
-
-    var message_value: ?json.Value = obj.get("message");
-    if (message_value == null) message_value = obj.get("errorMessage");
-    if (message_value == null) message_value = obj.get("detail");
-    const message_copy = try dupOptionalString(self.allocator, message_value);
-    errdefer if (message_copy) |msg| self.allocator.free(msg);
-
-    var hash_copy: ?[]u8 = null;
-    if (obj.get("hash")) |hash_val| switch (hash_val) {
-        .string => |s| hash_copy = try self.allocator.dupe(u8, s),
-        .null => {},
-        else => return error.ParseError,
-    };
-    errdefer if (hash_copy) |h| self.allocator.free(h);
-
-    const node_id = try parseOptionalNodeId(obj.get("nodeId"));
-
-    const response = model.TransactionResponse{
-        .transaction_id = tx_id,
-        .node_id = node_id,
-        .status = status_copy,
-        .hash = hash_copy,
-        .status_code = status_code,
-        .error_message = message_copy,
-        .success = false,
-    };
-
-    const log_message = if (message_copy) |msg| msg else status_copy;
-    log.err("submit rejected {d}: {s}", .{ status_code, log_message });
-
-    return response;
 }
 
 test "parseSubmissionResponse marks successful token transfer" {

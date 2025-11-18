@@ -28,7 +28,7 @@ test "HTTP API usage compiles" {
 
         var transfer_buffer: [4096]u8 = undefined;
         const reader = response.reader(&transfer_buffer);
-        const body = try reader.*.allocRemaining(allocator, 1 * 1024 * 1024);
+        const body = try reader.*.allocRemaining(allocator, std.Io.Limit.limited(1 * 1024 * 1024));
         allocator.free(body);
     }
 }

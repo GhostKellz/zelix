@@ -30,7 +30,7 @@ pub const GzipDecompressor = struct {
         var gzip_stream = try std.compress.gzip.decompress(self.allocator, stream.reader());
         defer gzip_stream.deinit();
 
-        return try gzip_stream.reader().allocRemaining(self.allocator, std.math.maxInt(usize));
+        return try gzip_stream.reader().allocRemaining(self.allocator, std.Io.Limit.unlimited);
     }
 
     /// Decompress streaming data (incremental)
