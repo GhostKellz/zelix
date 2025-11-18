@@ -403,7 +403,7 @@ pub const ConsensusClient = struct {
                 return true;
             }
 
-            const now = std.time.nanoTimestamp();
+            const now = (try std.time.Instant.now()).timestamp;
             if (now >= node.cooldown_until_ns) {
                 node.consecutive_failures = 0;
                 node.cooldown_until_ns = 0;
@@ -430,7 +430,7 @@ pub const ConsensusClient = struct {
 
     fn applyCooldown(self: *ConsensusClient, node: *NodeEndpoint) void {
         node.healthy = false;
-        const now = std.time.nanoTimestamp();
+        const now = (std.time.Instant.now() catch unreachable).timestamp;
         const delta: i128 = @intCast(self.node_cooldown_ns);
         node.cooldown_until_ns = now + delta;
         log.warn("marking node {d}.{d}.{d} unhealthy for {d} ms", .{
@@ -476,7 +476,7 @@ pub const ConsensusClient = struct {
     fn submitTransactionGrpc(self: *ConsensusClient, tx_bytes: []const u8, tx_id_hint: ?model.TransactionId) !model.TransactionResponse {
         if (self.nodes.items.len == 0) return error.NoNodesConfigured;
 
-        const start_ns = std.time.nanoTimestamp();
+        var timer = try std.time.Timer.start();
         const attempts = @min(self.nodes.items.len, 3);
         var attempt: usize = 0;
         var last_err: ?anyerror = null;
@@ -496,8 +496,8 @@ pub const ConsensusClient = struct {
                 continue;
             };
             self.registerNodeSuccess(node);
-            const elapsed_ns = std.time.nanoTimestamp() - start_ns;
-            const elapsed_ms = @as(u64, @intCast(@max(elapsed_ns, 0) / @as(i128, std.time.ns_per_ms)));
+            const elapsed_ns = timer.read();
+            const elapsed_ms = @as(u64, @intCast(elapsed_ns / std.time.ns_per_ms));
             const summary = self.snapshotGrpcSummary();
             log.info(
                 "submit via gRPC succeeded in {d} attempt(s) ({d} ms) [requests={d} retries={d} failures={d} last_status={d} last_http={d} last_latency_ms={d}]",
@@ -515,8 +515,8 @@ pub const ConsensusClient = struct {
             return response;
         }
 
-        const elapsed_ns = std.time.nanoTimestamp() - start_ns;
-        const elapsed_ms = @as(u64, @intCast(@max(elapsed_ns, 0) / @as(i128, std.time.ns_per_ms)));
+        const elapsed_ns = timer.read();
+        const elapsed_ms = @as(u64, @intCast(elapsed_ns / std.time.ns_per_ms));
         const summary = self.snapshotGrpcSummary();
         log.err(
             "submit via gRPC failed after {d} attempt(s) ({d} ms): {s} [requests={d} retries={d} failures={d} last_status={d} last_http={d} last_latency_ms={d}]",
@@ -538,7 +538,7 @@ pub const ConsensusClient = struct {
     fn submitTransactionRest(self: *ConsensusClient, tx_bytes: []const u8) !model.TransactionResponse {
         if (self.submit_url.len == 0) return error.SubmitEndpointUnavailable;
 
-        const start_ns = std.time.nanoTimestamp();
+        var timer = try std.time.Timer.start();
         const attempts = if (self.nodes.items.len == 0) 1 else @min(self.nodes.items.len, 3);
         var attempt: usize = 0;
         var last_err: ?anyerror = null;
@@ -559,14 +559,14 @@ pub const ConsensusClient = struct {
                 continue;
             };
             self.registerNodeSuccess(node);
-            const elapsed_ns = std.time.nanoTimestamp() - start_ns;
-            const elapsed_ms = @as(u64, @intCast(@max(elapsed_ns, 0) / @as(i128, std.time.ns_per_ms)));
+            const elapsed_ns = timer.read();
+            const elapsed_ms = @as(u64, @intCast(elapsed_ns / std.time.ns_per_ms));
             log.info("submit via REST succeeded in {d} attempt(s) ({d} ms)", .{ attempt + 1, elapsed_ms });
             return response;
         }
 
-        const elapsed_ns = std.time.nanoTimestamp() - start_ns;
-        const elapsed_ms = @as(u64, @intCast(@max(elapsed_ns, 0) / @as(i128, std.time.ns_per_ms)));
+        const elapsed_ns = timer.read();
+        const elapsed_ms = @as(u64, @intCast(elapsed_ns / std.time.ns_per_ms));
         log.err("submit via REST failed after {d} attempt(s) ({d} ms): {s}", .{
             attempts,
             elapsed_ms,
@@ -925,7 +925,7 @@ pub const ConsensusClient = struct {
             else => {},
         }
 
-        const start_ns = std.time.nanoTimestamp();
+        var timer = try std.time.Timer.start();
         const attempts = if (self.nodes.items.len == 0) 1 else @min(self.nodes.items.len, 3);
         var attempt: usize = 0;
         var last_err: ?anyerror = null;
@@ -945,16 +945,14 @@ pub const ConsensusClient = struct {
                 continue;
             };
             self.registerNodeSuccess(node);
-            const elapsed_ns = std.time.nanoTimestamp() - start_ns;
-            const elapsed_ns_clamped = @max(elapsed_ns, 0);
-            const elapsed_ms = @as(u64, @intCast(elapsed_ns_clamped / @as(i128, std.time.ns_per_ms)));
+            const elapsed_ns = timer.read();
+            const elapsed_ms = @as(u64, @intCast(elapsed_ns / std.time.ns_per_ms));
             log.info("query succeeded in {d} attempt(s) ({d} ms)", .{ attempt + 1, elapsed_ms });
             return response;
         }
 
-        const elapsed_ns = std.time.nanoTimestamp() - start_ns;
-        const elapsed_ns_clamped = @max(elapsed_ns, 0);
-        const elapsed_ms = @as(u64, @intCast(elapsed_ns_clamped / @as(i128, std.time.ns_per_ms)));
+        const elapsed_ns = timer.read();
+        const elapsed_ms = @as(u64, @intCast(elapsed_ns / std.time.ns_per_ms));
         log.err("query failed after {d} attempt(s) ({d} ms): {s}", .{ attempts, elapsed_ms, @errorName(last_err orelse error.QueryFailed) });
         return last_err orelse error.QueryFailed;
     }
