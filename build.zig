@@ -155,6 +155,34 @@ pub fn build(b: *std.Build) void {
     const integration_step = b.step("integration", "Run Hedera integration smoke tests");
     integration_step.dependOn(&run_integration_tests.step);
 
+    // Memory leak tests
+    const memory_leak_module = b.createModule(.{
+        .root_source_file = b.path("tests/memory_leak_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "zelix", .module = mod }},
+    });
+
+    const memory_leak_tests = b.addTest(.{ .root_module = memory_leak_module });
+
+    const run_memory_leak_tests = b.addRunArtifact(memory_leak_tests);
+    const memory_leak_step = b.step("test-leaks", "Run memory leak tests");
+    memory_leak_step.dependOn(&run_memory_leak_tests.step);
+
+    // Performance benchmarks
+    const perf_module = b.createModule(.{
+        .root_source_file = b.path("tests/performance_benchmark.zig"),
+        .target = target,
+        .optimize = .ReleaseFast, // Always run benchmarks in release mode
+        .imports = &.{.{ .name = "zelix", .module = mod }},
+    });
+
+    const perf_tests = b.addTest(.{ .root_module = perf_module });
+
+    const run_perf_tests = b.addRunArtifact(perf_tests);
+    const perf_step = b.step("test-perf", "Run performance benchmarks");
+    perf_step.dependOn(&run_perf_tests.step);
+
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means

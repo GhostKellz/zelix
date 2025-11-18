@@ -7,4 +7,5 @@ test "integration suite" {
     _ = @import("account_info.zig");
     _ = @import("transaction_history.zig");
     _ = @import("token_info.zig");
+    _ = @import("transaction_submit.zig");
 }
