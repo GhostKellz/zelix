@@ -36,6 +36,7 @@ pub const TransactionReceiptQuery = @import("query.zig").TransactionReceiptQuery
 
 // Transactions - Account
 pub const CryptoTransferTransaction = @import("tx.zig").CryptoTransferTransaction;
+pub const TokenTransferTransaction = @import("tx.zig").TokenTransferTransaction;
 pub const AccountCreateTransaction = @import("tx.zig").AccountCreateTransaction;
 pub const AccountUpdateTransaction = @import("tx.zig").AccountUpdateTransaction;
 pub const AccountDeleteTransaction = @import("tx.zig").AccountDeleteTransaction;
