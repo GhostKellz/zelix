@@ -231,7 +231,9 @@ pub const TokenCreateTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -307,7 +309,9 @@ pub const TokenMintTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -383,7 +387,9 @@ pub const TokenBurnTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -451,7 +457,9 @@ pub const TokenAssociateTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -519,7 +527,9 @@ pub const TokenDissociateTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -661,7 +671,9 @@ pub const TokenUpdateTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -716,7 +728,9 @@ pub const TokenDeleteTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -804,7 +818,9 @@ pub const TokenWipeTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -871,7 +887,9 @@ pub const TokenFreezeTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -938,7 +956,9 @@ pub const TokenUnfreezeTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -993,7 +1013,9 @@ pub const TokenPauseTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -1048,6 +1070,8 @@ pub const TokenUnpauseTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };

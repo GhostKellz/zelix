@@ -120,7 +120,9 @@ pub const ScheduleCreateTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -175,7 +177,9 @@ pub const ScheduleSignTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
@@ -230,7 +234,9 @@ pub const ScheduleDeleteTransaction = struct {
         try self.freeze();
         const tx_bytes = try self.builder.toBytes();
         defer self.allocator.free(tx_bytes);
-        return try client.executeTransaction(tx_bytes);
+        const response = try client.consensus_client.submitTransaction(tx_bytes);
+        const tx_id = response.transaction_id orelse return error.NoTransactionId;
+        return try client.consensus_client.getTransactionReceipt(tx_id);
     }
 };
 
