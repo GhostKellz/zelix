@@ -588,8 +588,10 @@ pub const ConsensusClient = struct {
     }
 
     fn performSubmitRest(self: *ConsensusClient, node: *NodeEndpoint, tx_bytes: []const u8) !model.TransactionResponse {
-        const encoded = try base64.standard.Encoder.encodeAlloc(self.allocator, tx_bytes);
+        const encoded_len = base64.standard.Encoder.calcSize(tx_bytes.len);
+        const encoded = try self.allocator.alloc(u8, encoded_len);
         defer self.allocator.free(encoded);
+        _ = base64.standard.Encoder.encode(encoded, tx_bytes);
 
         const node_str = try std.fmt.allocPrint(self.allocator, "{d}.{d}.{d}", .{ node.account_id.shard, node.account_id.realm, node.account_id.num });
         defer self.allocator.free(node_str);
@@ -713,8 +715,10 @@ pub const ConsensusClient = struct {
         var delay = base;
         if (capped_attempt > 0) {
             const shift: u6 = @intCast(capped_attempt);
-            if (shift < 63 and base <= (math.maxInt(u64) >> shift)) {
-                delay = base << shift;
+            const shifted_base = base << shift;
+            // Check for overflow by comparing with max value
+            if (shifted_base >= base and shifted_base <= max_allowed) {
+                delay = shifted_base;
             } else {
                 delay = max_allowed;
             }
