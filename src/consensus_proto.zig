@@ -569,7 +569,7 @@ fn readVarint(data: []const u8, index: *usize) !u64 {
         if (index.* >= data.len) return error.UnexpectedEndOfStream;
         const byte = data[index.*];
         index.* += 1;
-        result |= (@as(u64, byte & 0x7F) << shift);
+        result |= (@as(u64, byte & 0x7F) << @as(u6, @intCast(shift)));
         if ((byte & 0x80) == 0) break;
         shift += 7;
         if (shift >= 64) return error.VarintOverflow;
