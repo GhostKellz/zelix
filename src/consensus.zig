@@ -445,9 +445,9 @@ pub const ConsensusClient = struct {
     pub fn submitTransaction(self: *ConsensusClient, tx_bytes: []const u8) !model.TransactionResponse {
         var grpc_err: ?anyerror = null;
         var tx_id_hint: ?model.TransactionId = null;
-        tx_id_hint = consensus_proto.extractTransactionId(tx_bytes) catch |err| {
+        tx_id_hint = consensus_proto.extractTransactionId(tx_bytes) catch |err| blk: {
             log.debug("unable to derive transaction id from submission payload: {s}", .{@errorName(err)});
-            null;
+            break :blk null;
         };
 
         if (self.nodes.items.len > 0) {
